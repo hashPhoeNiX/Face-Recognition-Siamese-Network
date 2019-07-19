@@ -5,7 +5,9 @@ from torchvision import models, transforms
 from torch import nn
 from torch.nn import functional as F
 import numpy as np
+from inception_resnet_v1 import InceptionResnetV1
 
+input = 256 * 2 * 3
 class EmbeddingNet(nn.Module):
     def __init__(self):
         super(EmbeddingNet, self).__init__()
@@ -14,8 +16,8 @@ class EmbeddingNet(nn.Module):
                                      nn.MaxPool2d(2, stride=2),
                                      nn.Conv2d(32, 576, 4), nn.PReLU(),
                                      nn.MaxPool2d(2, stride=2))
-        
-        self.fc = nn.Sequential(nn.Linear(96 * 2 * 3, 512),
+
+        self.fc = nn.Sequential(nn.Linear(input, 512),
                                 nn.PReLU(),
                                 nn.Linear(512, 256),
                                 nn.PReLU(),
@@ -49,16 +51,16 @@ class TripletLoss(nn.Module):
         '''
         dist_ap = F.pairwise_distance(x, y).pow(2)
         dist_an = F.pairwise_distance(x, z).pow(2)
-        
+
         loss = (dist_ap - dist_an + self.margin)
         loss = F.relu(loss)
-        
+
         return loss.mean()if loss_average else loss.sum()
 
 class TripletNet(nn.Module):
-    def __init__(self, EmbeddingNet, margin=1.0):
+    def __init__(self, InceptionResnetV1, margin=1.0):
         super(TripletNet, self).__init__()
-        self.embeddingNet = EmbeddingNet
+        self.embeddingNet = InceptionResnetV1
         self.margin = margin
 
     def forward(self, x, y, z):
@@ -71,7 +73,7 @@ class TripletNet(nn.Module):
 
         loss = (dist_ap - dist_an + self.margin)
         loss = F.relu(loss)
-        
+
         return loss.mean()
 
 
@@ -82,7 +84,7 @@ def BinaryLoss(embd_x, embd_y, W, b):
     y_hat = F.log_softmax(binary, dim=0)
 
     return y_hat
-    
+
 def img_encoding(image_name, transform, embed):
     image = Image.open(image_name)
     image = transform(image).float()
@@ -93,13 +95,13 @@ def img_encoding(image_name, transform, embed):
 
     return embedding
 
-def verification(image_path, identity, db, embednet, transform=None):
+def verification(image_path, identity, db, embednet, transform=None, threshold=0.7):
     encoding = img_encoding(image_path, transform, embednet)
     dist = torch.norm(db[identity] - encoding)
     # dist = torch.subtract(db[identity], encoding)
 
 
-    if dist < 1.5:
+    if dist < threshold:
         print(f"{identity} matched!")
         access = True
     else:
@@ -108,9 +110,9 @@ def verification(image_path, identity, db, embednet, transform=None):
 
     return dist, access
 
-def recognition(image_path, identity, db, embednet, transform=None, threshold=0.7):
+def recognition(image_path, db, embednet, transform=None, threshold=0.7):
     encoding = img_encoding(image_path, transform, embednet)
-   
+
 
     min_dist = 100
     for name, db_encode in db.items():
@@ -119,7 +121,7 @@ def recognition(image_path, identity, db, embednet, transform=None, threshold=0.
         if dist < min_dist:
             min_dist = dist
             identity = name
-        
+
     if min_dist > threshold:
         print('Not in the database')
     else:
