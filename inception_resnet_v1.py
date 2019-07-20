@@ -303,8 +303,9 @@ def load_weights(mdl, name):
         logits_path = 'https://drive.google.com/uc?export=download&id=1QrhPgn1bGlDxAil2uc07ctunCQoDnCzT'
     else:
         raise ValueError('Pretrained models only exist for "vggface2" and "casia-webface"')
-
-    model_dir = os.path.join(get_torch_home(), 'checkpoints')
+    
+    cwd = os.getcwd()
+    model_dir = os.path.join(cwd, 'checkpoints')
     os.makedirs(model_dir, exist_ok=True)
 
     state_dict = {}
